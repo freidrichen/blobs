@@ -1,13 +1,19 @@
 use ggez::event::{self, EventHandler};
 use ggez::graphics;
 use ggez::{Context, ContextBuilder, GameResult};
-use mint::Point2;
+use nalgebra::{Point2, Vector2};
 
-struct GameState {}
+struct GameState {
+    aim_vec: Vector2<f32>,
+    center: Point2<f32>,
+}
 
 impl GameState {
     fn new(ctx: &Context) -> GameState {
-        GameState {}
+        GameState {
+            aim_vec: Vector2::x(),
+            center: Point2::new(100.0, 100.0),
+        }
     }
 }
 
@@ -21,13 +27,27 @@ impl EventHandler for GameState {
         let blob = graphics::Mesh::new_circle(
             ctx,
             graphics::DrawMode::fill(),
-            Point2 { x: 100.0, y: 100.0 },
+            self.center,
             40.0,
             0.5,
             (128, 128, 128).into(),
         )?;
         graphics::draw(ctx, &blob, graphics::DrawParam::new())?;
+        let aim = graphics::Mesh::new_circle(
+            ctx,
+            graphics::DrawMode::fill(),
+            self.center + 50.0*self.aim_vec,
+            4.0,
+            1.0,
+            (200, 200, 200).into(),
+        )?;
+        graphics::draw(ctx, &aim, graphics::DrawParam::new())?;
         graphics::present(ctx)
+    }
+
+    fn mouse_motion_event(&mut self, ctx: &mut Context, x: f32, y: f32, _dx: f32, _dy: f32) {
+        let cursor_pos = Point2::new(x, y);
+        self.aim_vec = (cursor_pos - self.center).normalize();
     }
 }
 
