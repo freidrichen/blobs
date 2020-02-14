@@ -9,10 +9,17 @@ const SPRING_EQ_LEN: f32 = 40.0;
 const DAMPING_CONST: f32 = 0.01;
 const G: f32 = 10.0;
 
+enum HookState {
+    Hooked(Point2<f32>),
+    Traveling(Point2<f32>, Vector2<f32>),
+    None,
+}
+
 struct GameState {
     center: Point2<f32>,
     vel: Vector2<f32>,
     aim_vec: Vector2<f32>,
+    hook: HookState,
 }
 
 impl GameState {
@@ -21,6 +28,7 @@ impl GameState {
             center: Point2::new(100.0, 100.0),
             vel: Vector2::zeros(),
             aim_vec: Vector2::x(),
+            hook: HookState::Hooked(Point2::new(400.0, 0.0)),
         }
     }
 }
@@ -28,13 +36,16 @@ impl GameState {
 impl EventHandler for GameState {
     fn update(&mut self, _ctx: &mut Context) -> GameResult<()> {
         let dt = 0.1;
-        let spring_vec = Point2::new(400.0, 0.0) - self.center;
-        let spring_vec = if spring_vec.norm() < SPRING_EQ_LEN {
-            0.0
+        let acc_spring = if let HookState::Hooked(hook_point) = self.hook {
+            let spring_vec = hook_point - self.center;
+            (if spring_vec.norm() < SPRING_EQ_LEN {
+                0.0
+            } else {
+                (spring_vec.norm() - SPRING_EQ_LEN) / spring_vec.norm() / spring_vec.norm()
+            }) * SPRING_CONST * spring_vec
         } else {
-            (spring_vec.norm() - SPRING_EQ_LEN) / spring_vec.norm() / spring_vec.norm()
-        } * spring_vec;
-        let acc_spring = SPRING_CONST * spring_vec;
+            Vector2::zeros()
+        };
         let acc_damping = -DAMPING_CONST * self.vel;
         let acc_gravity = G * Vector2::y();
         let acc_tot = acc_spring + acc_gravity + acc_damping;
@@ -65,13 +76,15 @@ impl EventHandler for GameState {
             (200, 200, 200).into(),
         )?;
         graphics::draw(ctx, &aim, graphics::DrawParam::new())?;
-        let line = graphics::Mesh::new_line(
-            ctx,
-            &[self.center, Point2::new(400.0, 0.0)],
-            4.0,
-            (200, 200, 200).into(),
-        )?;
-        graphics::draw(ctx, &line, graphics::DrawParam::new())?;
+        if let HookState::Hooked(hook_point) | HookState::Traveling(hook_point, _) = self.hook {
+            let hook = graphics::Mesh::new_line(
+                ctx,
+                &[self.center, hook_point],
+                4.0,
+                (200, 200, 200).into(),
+            )?;
+            graphics::draw(ctx, &hook, graphics::DrawParam::new())?;
+        }
         graphics::present(ctx)
     }
 
