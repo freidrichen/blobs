@@ -1,6 +1,6 @@
 use ggez::event::{self, EventHandler};
 use ggez::graphics;
-use ggez::{Context, ContextBuilder, GameResult};
+use ggez::{Context, GameResult};
 use ggez::input::mouse::MouseButton;
 use nalgebra::{Point2, Vector2};
 
@@ -10,6 +10,8 @@ const SPRING_EQ_LEN: f32 = 40.0;
 const DAMPING_CONST: f32 = 0.01;
 const G: f32 = 10.0;
 const HOOK_TRAVELING_SPEED: f32 = 150.0;
+
+const SCREEN_SIZE: (f32, f32) = (1000.0, 1000.0);
 
 enum HookState {
     Hooked(Point2<f32>),
@@ -59,7 +61,11 @@ impl EventHandler for GameState {
         // Update hook position
         if let HookState::Traveling(hook_point, hook_vel) = self.hook {
             let hook_point = hook_point + hook_vel * dt;
-            self.hook = HookState::Traveling(hook_point, hook_vel);
+            if let Some(collision_point) = wall_collision(hook_point) {
+                self.hook = HookState::Hooked(collision_point)
+            } else {
+                self.hook = HookState::Traveling(hook_point, hook_vel);
+            }
         }
 
         Ok(())
@@ -115,13 +121,29 @@ impl EventHandler for GameState {
     }
 }
 
-fn main() {
-    // Make a Context and an EventLoop.
-    let (mut ctx, mut event_loop) = ContextBuilder::new("Blobs", "Freidrichen").build().unwrap();
+/// Look for collision between point p and walls.
+/// Returns the point of collision if any, otherwise returns None.
+fn wall_collision(p: Point2<f32>) -> Option<Point2<f32>> {
+    let x = p.coords.x;
+    let y = p.coords.y;
+    if x < 0.0 {
+        Some(Point2::new(0.0, y))
+    } else if x > SCREEN_SIZE.0 {
+        Some(Point2::new(SCREEN_SIZE.0, y))
+    } else if y < 0.0 {
+        Some(Point2::new(x, 0.0))
+    } else if y > SCREEN_SIZE.1 {
+        Some(Point2::new(x, SCREEN_SIZE.1))
+    } else {
+        None
+    }
+}
 
-    // Create an instance of your event handler.
-    // Usually, you should provide it with the Context object
-    // so it can load resources like images during setup.
+fn main() {
+    let (mut ctx, mut event_loop) = ggez::ContextBuilder::new("Blobs", "Freidrichen")
+        .window_setup(ggez::conf::WindowSetup::default().title("Blobs!"))
+        .window_mode(ggez::conf::WindowMode::default().dimensions(SCREEN_SIZE.0, SCREEN_SIZE.1))
+        .build().unwrap();
     let mut my_game = GameState::new(&mut ctx);
 
     match event::run(&mut ctx, &mut event_loop, &mut my_game) {
