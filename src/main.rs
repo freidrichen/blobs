@@ -1,6 +1,7 @@
 use ggez::event::{self, EventHandler};
 use ggez::graphics;
 use ggez::{Context, ContextBuilder, GameResult};
+use ggez::input::mouse::MouseButton;
 use nalgebra::{Point2, Vector2};
 
 // SPRING_CONSTANT is physical spring constant divided by blob mass
@@ -8,6 +9,7 @@ const SPRING_CONST: f32 = 20.0;
 const SPRING_EQ_LEN: f32 = 40.0;
 const DAMPING_CONST: f32 = 0.01;
 const G: f32 = 10.0;
+const HOOK_TRAVELING_SPEED: f32 = 150.0;
 
 enum HookState {
     Hooked(Point2<f32>),
@@ -50,8 +52,15 @@ impl EventHandler for GameState {
         let acc_gravity = G * Vector2::y();
         let acc_tot = acc_spring + acc_gravity + acc_damping;
 
+        // Update blob position and velocity
         self.vel += acc_tot * dt;
         self.center += self.vel * dt;
+
+        // Update hook position
+        if let HookState::Traveling(hook_point, hook_vel) = self.hook {
+            let hook_point = hook_point + hook_vel * dt;
+            self.hook = HookState::Traveling(hook_point, hook_vel);
+        }
 
         Ok(())
     }
@@ -91,6 +100,18 @@ impl EventHandler for GameState {
     fn mouse_motion_event(&mut self, _ctx: &mut Context, x: f32, y: f32, _dx: f32, _dy: f32) {
         let cursor_pos = Point2::new(x, y);
         self.aim_vec = (cursor_pos - self.center).normalize();
+        // TODO: Ensure that aim_vec can never be (0, 0)
+    }
+
+    fn mouse_button_down_event(&mut self, _ctx: &mut Context, button: MouseButton, _x: f32, _y: f32) {
+        if button == MouseButton::Right {
+            self.hook = HookState::None;
+        } else if button == MouseButton::Left {
+            self.hook = HookState::Traveling(
+                self.center + self.aim_vec,
+                HOOK_TRAVELING_SPEED * self.aim_vec
+            )
+        }
     }
 }
 
