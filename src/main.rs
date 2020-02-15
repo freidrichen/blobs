@@ -11,6 +11,7 @@ const DAMPING_CONST: f32 = 0.01;
 const G: f32 = 10.0;
 const HOOK_TRAVELING_SPEED: f32 = 150.0;
 
+const BLOB_RADIUS: f32 = 40.0;
 const SCREEN_SIZE: (f32, f32) = (1000.0, 1000.0);
 
 enum HookState {
@@ -57,14 +58,22 @@ impl EventHandler for GameState {
         // Update blob position and velocity
         self.vel += acc_tot * dt;
         self.center += self.vel * dt;
+        if let Some((_collision_point, collision_normal)) = wall_blob_collision(self.center) {
+            // Mirror velocity in the plane defined by normal vector.
+            self.vel -= 2.0*self.vel.dot(&collision_normal)*collision_normal;
+
+            // TODO: Move center out of wall too. This is important for when the
+            // next turns forces (e.g. gravity) are strong so the flipped
+            // velocity is not enough to escape the wall. Try moving close to
+            // the ground with low vertical velocity to see an example of this.
+        }
 
         // Update hook position
         if let HookState::Traveling(hook_point, hook_vel) = self.hook {
             let hook_point = hook_point + hook_vel * dt;
-            if let Some(collision_point) = wall_collision(hook_point) {
-                self.hook = HookState::Hooked(collision_point)
-            } else {
-                self.hook = HookState::Traveling(hook_point, hook_vel);
+            self.hook = match wall_point_collision(hook_point) {
+                Some(collision_point) => HookState::Hooked(collision_point),
+                None => HookState::Traveling(hook_point, hook_vel),
             }
         }
 
@@ -77,7 +86,7 @@ impl EventHandler for GameState {
             ctx,
             graphics::DrawMode::fill(),
             self.center,
-            40.0,
+            BLOB_RADIUS,
             0.5,
             (128, 128, 128).into(),
         )?;
@@ -85,7 +94,7 @@ impl EventHandler for GameState {
         let aim = graphics::Mesh::new_circle(
             ctx,
             graphics::DrawMode::fill(),
-            self.center + 50.0 * self.aim_vec,
+            self.center + (BLOB_RADIUS + 10.0) * self.aim_vec,
             4.0,
             1.0,
             (200, 200, 200).into(),
@@ -121,9 +130,28 @@ impl EventHandler for GameState {
     }
 }
 
+/// Look for collision between blob and walls.
+/// Returns the point of collision and the normal vector,
+/// or None if no collision has occurred.
+fn wall_blob_collision(blob_center: Point2<f32>) -> Option<(Point2<f32>, Vector2<f32>)> {
+    let x = blob_center.coords.x;
+    let y = blob_center.coords.y;
+    if x < BLOB_RADIUS {
+        Some((Point2::new(0.0, y), Vector2::x()))
+    } else if x > SCREEN_SIZE.0 - BLOB_RADIUS {
+        Some((Point2::new(SCREEN_SIZE.0, y), -Vector2::x()))
+    } else if y < BLOB_RADIUS {
+        Some((Point2::new(x, 0.0), Vector2::y()))
+    } else if y > SCREEN_SIZE.1 - BLOB_RADIUS {
+        Some((Point2::new(x, SCREEN_SIZE.1), -Vector2::y()))
+    } else {
+        None
+    }
+}
+
 /// Look for collision between point p and walls.
 /// Returns the point of collision if any, otherwise returns None.
-fn wall_collision(p: Point2<f32>) -> Option<Point2<f32>> {
+fn wall_point_collision(p: Point2<f32>) -> Option<Point2<f32>> {
     let x = p.coords.x;
     let y = p.coords.y;
     if x < 0.0 {
