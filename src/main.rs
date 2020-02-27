@@ -58,14 +58,10 @@ impl EventHandler for GameState {
         // Update blob position and velocity
         self.vel += acc_tot * dt;
         self.center += self.vel * dt;
-        if let Some((_collision_point, collision_normal)) = wall_blob_collision(self.center) {
+        if let Some((alpha, collision_normal)) = wall_blob_collision(self.center, self.vel) {
             // Mirror velocity in the plane defined by normal vector.
             self.vel -= 2.0*self.vel.dot(&collision_normal)*collision_normal;
-
-            // TODO: Move center out of wall too. This is important for when the
-            // next turns forces (e.g. gravity) are strong so the flipped
-            // velocity is not enough to escape the wall. Try moving close to
-            // the ground with low vertical velocity to see an example of this.
+            self.center -= 2.0*(self.center - ()).dot(&collision_normal)*collision_normal;
         }
 
         // Update hook position
@@ -133,16 +129,20 @@ impl EventHandler for GameState {
 /// Look for collision between blob and walls.
 /// Returns the point of collision and the normal vector,
 /// or None if no collision has occurred.
-fn wall_blob_collision(blob_center: Point2<f32>) -> Option<(Point2<f32>, Vector2<f32>)> {
+fn wall_blob_collision(blob_center: Point2<f32>, last_step_vec: Vector2<f32>) -> Option<(f32, Vector2<f32>)> {
     let x = blob_center.coords.x;
     let y = blob_center.coords.y;
     if x < BLOB_RADIUS {
-        Some((Point2::new(0.0, y), Vector2::x()))
+        let alpha = (BLOB_RADIUS - x)/last_step_vec.x;
+        Some((alpha, Vector2::x()))
     } else if x > SCREEN_SIZE.0 - BLOB_RADIUS {
+        let alpha = (BLOB_RADIUS - x)/last_step_vec.x;
         Some((Point2::new(SCREEN_SIZE.0, y), -Vector2::x()))
     } else if y < BLOB_RADIUS {
+        let alpha = (BLOB_RADIUS - y)/last_step_vec.y; // How far into wall
         Some((Point2::new(x, 0.0), Vector2::y()))
     } else if y > SCREEN_SIZE.1 - BLOB_RADIUS {
+        let alpha = (BLOB_RADIUS - x)/last_step_vec.y;
         Some((Point2::new(x, SCREEN_SIZE.1), -Vector2::y()))
     } else {
         None
