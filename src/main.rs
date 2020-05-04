@@ -1,7 +1,7 @@
 use ggez::event::{self, EventHandler};
 use ggez::graphics;
+use ggez::input::mouse::{self, MouseButton};
 use ggez::{Context, GameResult};
-use ggez::input::mouse::MouseButton;
 use nalgebra::{Point2, Vector2};
 use std::collections::HashMap;
 
@@ -59,6 +59,9 @@ impl Blob {
             // velocity is not enough to escape the wall. Try moving close to
             // the ground with low vertical velocity to see an example of this.
         }
+        // TODO: Ensure that aim_vec can never be (0, 0)
+        let mouse_pos: Point2<f32> = mouse::position(ctx).into();
+        self.aim_vec = (mouse_pos - self.center).normalize();
 
         // Update hook position
         if let HookState::Traveling(hook_point, hook_vel) = self.hook {
