@@ -221,9 +221,14 @@ fn wall_point_collision(p: Point2<f32>) -> Option<Point2<f32>> {
 
 fn main() {
     let (mut ctx, mut event_loop) = ggez::ContextBuilder::new("Blobs", "Freidrichen")
-        .window_setup(ggez::conf::WindowSetup::default().title("Blobs!"))
+        .window_setup(
+            ggez::conf::WindowSetup::default()
+                .title("Blobs!")
+                .vsync(true),
+        )
         .window_mode(ggez::conf::WindowMode::default().dimensions(SCREEN_SIZE.0, SCREEN_SIZE.1))
-        .build().unwrap();
+        .build()
+        .unwrap();
     let mut my_game = GameState::new(&mut ctx);
 
     match event::run(&mut ctx, &mut event_loop, &mut my_game) {
