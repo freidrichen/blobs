@@ -3,6 +3,7 @@ use ggez::graphics;
 use ggez::{Context, GameResult};
 use ggez::input::mouse::MouseButton;
 use nalgebra::{Point2, Vector2};
+use std::collections::HashMap;
 
 // SPRING_CONSTANT is physical spring constant divided by blob mass
 const SPRING_CONST: f32 = 20.0;
@@ -14,32 +15,23 @@ const HOOK_TRAVELING_SPEED: f32 = 150.0;
 const BLOB_RADIUS: f32 = 40.0;
 const SCREEN_SIZE: (f32, f32) = (1000.0, 1000.0);
 
+const LOCAL_ID: usize = 0;
+
 enum HookState {
     Hooked(Point2<f32>),
     Traveling(Point2<f32>, Vector2<f32>),
     None,
 }
 
-struct GameState {
+struct Blob {
     center: Point2<f32>,
     vel: Vector2<f32>,
     aim_vec: Vector2<f32>,
     hook: HookState,
 }
 
-impl GameState {
-    fn new(_ctx: &Context) -> GameState {
-        GameState {
-            center: Point2::new(100.0, 100.0),
-            vel: Vector2::zeros(),
-            aim_vec: Vector2::x(),
-            hook: HookState::Hooked(Point2::new(400.0, 0.0)),
-        }
-    }
-}
-
-impl EventHandler for GameState {
-    fn update(&mut self, _ctx: &mut Context) -> GameResult<()> {
+impl Blob {
+    fn update(&mut self, ctx: &mut Context) -> GameResult<()> {
         let dt = 0.1;
         let acc_spring = if let HookState::Hooked(hook_point) = self.hook {
             let spring_vec = hook_point - self.center;
@@ -60,7 +52,7 @@ impl EventHandler for GameState {
         self.center += self.vel * dt;
         if let Some((_collision_point, collision_normal)) = wall_blob_collision(self.center) {
             // Mirror velocity in the plane defined by normal vector.
-            self.vel -= 2.0*self.vel.dot(&collision_normal)*collision_normal;
+            self.vel -= 2.0 * self.vel.dot(&collision_normal) * collision_normal;
 
             // TODO: Move center out of wall too. This is important for when the
             // next turns forces (e.g. gravity) are strong so the flipped
@@ -81,7 +73,6 @@ impl EventHandler for GameState {
     }
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult<()> {
-        graphics::clear(ctx, graphics::WHITE);
         let blob = graphics::Mesh::new_circle(
             ctx,
             graphics::DrawMode::fill(),
@@ -109,23 +100,81 @@ impl EventHandler for GameState {
             )?;
             graphics::draw(ctx, &hook, graphics::DrawParam::new())?;
         }
+        Ok(())
+    }
+}
+
+struct GameState {
+    blobs: HashMap<usize, Blob>,
+}
+
+impl GameState {
+    fn new(_ctx: &Context) -> GameState {
+        let mut blobs = HashMap::new();
+        blobs.insert(
+            0,
+            Blob {
+                center: Point2::new(100.0, 100.0),
+                vel: Vector2::zeros(),
+                aim_vec: Vector2::x(),
+                hook: HookState::Hooked(Point2::new(400.0, 0.0)),
+            },
+        );
+        blobs.insert(
+            10,
+            Blob {
+                center: Point2::new(200.0, 100.0),
+                vel: Vector2::new(10.0, 10.0),
+                aim_vec: Vector2::x(),
+                hook: HookState::Hooked(Point2::new(0.0, 0.0)),
+            },
+        );
+        GameState { blobs }
+    }
+}
+
+impl EventHandler for GameState {
+    fn update(&mut self, ctx: &mut Context) -> GameResult<()> {
+        for (_id, blob) in self.blobs.iter_mut() {
+            blob.update(ctx)?
+        }
+        Ok(())
+    }
+
+    fn draw(&mut self, ctx: &mut Context) -> GameResult<()> {
+        graphics::clear(ctx, graphics::WHITE);
+        for (_id, blob) in self.blobs.iter_mut() {
+            blob.draw(ctx)?;
+        }
         graphics::present(ctx)
     }
 
     fn mouse_motion_event(&mut self, _ctx: &mut Context, x: f32, y: f32, _dx: f32, _dy: f32) {
         let cursor_pos = Point2::new(x, y);
-        self.aim_vec = (cursor_pos - self.center).normalize();
         // TODO: Ensure that aim_vec can never be (0, 0)
+        self.blobs
+            .entry(LOCAL_ID)
+            .and_modify(|blob| blob.aim_vec = (cursor_pos - blob.center).normalize());
     }
 
-    fn mouse_button_down_event(&mut self, _ctx: &mut Context, button: MouseButton, _x: f32, _y: f32) {
+    fn mouse_button_down_event(
+        &mut self,
+        _ctx: &mut Context,
+        button: MouseButton,
+        _x: f32,
+        _y: f32,
+    ) {
         if button == MouseButton::Right {
-            self.hook = HookState::None;
+            self.blobs
+                .entry(LOCAL_ID)
+                .and_modify(|blob| blob.hook = HookState::None);
         } else if button == MouseButton::Left {
-            self.hook = HookState::Traveling(
-                self.center + self.aim_vec,
-                HOOK_TRAVELING_SPEED * self.aim_vec
-            )
+            self.blobs.entry(LOCAL_ID).and_modify(|blob| {
+                blob.hook = HookState::Traveling(
+                    blob.center + blob.aim_vec,
+                    HOOK_TRAVELING_SPEED * blob.aim_vec,
+                )
+            });
         }
     }
 }
